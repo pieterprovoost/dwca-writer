@@ -4,4 +4,6 @@ __pycache__
 .env
 *.swp
 *.pyc
+dist
+dwca_writer.egg-info
 
