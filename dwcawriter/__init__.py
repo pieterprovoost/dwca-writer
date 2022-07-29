@@ -11,12 +11,16 @@ import csv
 
 
 def dump_tree(root: ET.Element, encoding:str="UTF-8") -> str:
+    """Dump an XML element to string."""
+
     tree = ET.ElementTree(root)
     ET.indent(tree, space="\t", level=0)
     return ET.tostring(tree.getroot()).decode(encoding)
 
 
 def escape_character(input: str) -> str:
+    """Escape a character for use in the table element attribute values."""
+
     return repr(input).replace("'", "") if input is not None else ""
 
 
@@ -32,12 +36,16 @@ class Table:
         self.lines_terminated_by = lines_terminated_by
         self.fields_enclosed_by = fields_enclosed_by
         self.ignore_header_lines = ignore_header_lines
-        self.table_fields = None
+        self.dwc_fields = None
 
     def get_filename(self) -> str:
+        """Generate a filename for this table."""
+
         return self.row_type.split("/")[-1].lower() + ".txt"
 
-    def fetch_table_fields(self) -> Dict:
+    def fetch_dwc_fields(self) -> Dict:
+        """Populate a dictionary with all Darwin Core field names and URIs for this table."""
+
         if self.row_type == "http://rs.tdwg.org/dwc/terms/Occurrence":
             spec_url = "https://rs.gbif.org/core/dwc_occurrence_2022-02-02.xml"
         if spec_url is not None:
@@ -45,16 +53,36 @@ class Table:
             content = io.BytesIO(res.content)
             spec_json = xmltodict.parse(content)
             properties = { prop["@name"]: prop["@qualName"] for prop in spec_json["extension"]["property"] }
-            self.table_fields = properties
+            self.dwc_fields = properties
         else:
             raise Exception(f"Row type {self.row_type} not supported")
 
-    def get_table_fields(self) -> Dict:
-        if self.table_fields is None:
-            self.fetch_table_fields()
-        return self.table_fields
+    def get_dwc_fields(self) -> Dict:
+        """Return a dictionary with all Darwin Core field names and URIs for this table, fetch if non populated."""
+
+        if self.dwc_fields is None:
+            self.fetch_dwc_fields()
+        return self.dwc_fields
+
+    def get_fields(self) -> List[Dict]:
+        """Return a data structure listing all table fields, their mapping, and their index in the output file."""
+
+        result = []
+
+        for index, column in enumerate(self.data.columns):
+            entry = {
+                "name": column,
+                "index_output": index, # TODO: fix for only mapped columns feature (to be added)
+                "uri": None
+            }
+            if column in self.get_dwc_fields():
+                entry["uri"] = self.get_dwc_fields()[column]
+            result.append(entry)
+
+        return result
 
     def get_xml_element(self) -> ET.Element:
+        """Generate the XML element for this table's entry in meta.xml."""
 
         root = ET.Element("core" if self.is_core else "extension", attrib=self.get_attributes())
         
@@ -74,13 +102,15 @@ class Table:
 
         # field
 
-        for index, column in enumerate(self.data.columns):
-            if column in self.get_table_fields():
-                ET.SubElement(root, "field", attrib={"index": str(index), "term": self.get_table_fields()[column]})
+        for field in self.get_fields():
+            if field["index_output"] is not None and field["uri"] is not None:
+                ET.SubElement(root, "field", attrib={"index": str(field["index_output"]), "term": field["uri"]})
 
         return root
 
     def get_attributes(self) -> Dict:
+        """Generate the attributes for this table's XML element."""
+
         return {
             "encoding": self.encoding,
             "fieldsTerminatedBy": escape_character(self.fields_terminated_by),
@@ -91,7 +121,10 @@ class Table:
         }
 
     def write_tsv(self, file) -> None:
-        self.data.to_csv(file, sep=self.fields_terminated_by, index=False, escapechar="\\", encoding=self.encoding, quoting=csv.QUOTE_MINIMAL if self.fields_enclosed_by is not None else csv.QUOTE_NONE, quotechar=self.fields_enclosed_by, line_terminator=self.lines_terminated_by)
+        """Write the table to tsv."""
+
+        exported_fields = [field["name"] for field in self.get_fields() if field["index_output"] is not None]
+        self.data.loc[:, exported_fields].to_csv(file, sep=self.fields_terminated_by, index=False, escapechar="\\", encoding=self.encoding, quoting=csv.QUOTE_MINIMAL if self.fields_enclosed_by is not None else csv.QUOTE_NONE, quotechar=self.fields_enclosed_by, line_terminator=self.lines_terminated_by)
 
 
 class Archive:
@@ -103,6 +136,8 @@ class Archive:
         self.extensions = extensions
 
     def get_meta_xml(self) -> ET.Element:
+        """Return XML element for meta.xml."""
+
         root = ET.Element("archive", attrib={"xmlns": "http://rs.tdwg.org/dwc/text/", "metadata" : "eml.xml"})
         root.append(self.core.get_xml_element())
         
@@ -112,7 +147,8 @@ class Archive:
 
         return root
 
-    def export(self, path):
+    def export(self, path: str) -> None:
+        """Export Darwin Core Archive."""
 
         with tempfile.TemporaryDirectory() as tmpdir:
 
