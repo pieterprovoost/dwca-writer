@@ -8,6 +8,8 @@ import tempfile
 import os
 from zipfile import ZipFile
 import csv
+import pkg_resources
+import re
 
 
 def xml_to_string(root: ET.Element, encoding:str="UTF-8") -> str:
@@ -26,8 +28,8 @@ def escape_character(input: str) -> str:
 
 class Table:
 
-    def __init__(self, data: pd.DataFrame=None, row_type: str=None, id_index=None, encoding="UTF-8", fields_terminated_by="\t", lines_terminated_by="\n", fields_enclosed_by=None, ignore_header_lines=1):
-        self.row_type = row_type
+    def __init__(self, data: pd.DataFrame=None, spec: str=None, id_index=None, encoding="UTF-8", fields_terminated_by="\t", lines_terminated_by="\n", fields_enclosed_by=None, ignore_header_lines=1):
+        self.spec = spec
         self.id_index = id_index
         self.data = data
         self.encoding = encoding
@@ -36,6 +38,7 @@ class Table:
         self.fields_enclosed_by = fields_enclosed_by
         self.ignore_header_lines = ignore_header_lines
         self.dwc_fields = None
+        self.row_type = None
 
     def get_filename(self) -> str:
         """Generate a filename for this table."""
@@ -45,19 +48,19 @@ class Table:
     def fetch_dwc_fields(self) -> Dict:
         """Populate a dictionary with all Darwin Core field names and URIs for this table."""
 
-        if self.row_type == "http://rs.tdwg.org/dwc/terms/Occurrence":
-            spec_url = "https://rs.gbif.org/core/dwc_occurrence_2022-02-02.xml"
-        elif self.row_type == "http://rs.tdwg.org/dwc/terms/MeasurementOrFact":
-            spec_url = "https://rs.gbif.org/extension/dwc/measurements_or_facts_2022-02-02.xml"
+        if self.spec is not None and self.spec.startswith("https://rs.gbif.org/"):
+            spec_location = re.search("https://rs.gbif.org/(.+xml)", self.spec).group(1)
+            parts = spec_location.split("/")
+            spec_path = pkg_resources.resource_filename(__name__, os.path.join("data", *parts))
 
-        if spec_url is not None:
-            res = requests.get(spec_url, timeout=30, verify=False)
-            content = io.BytesIO(res.content)
-            spec_json = xmltodict.parse(content)
-            properties = { prop["@name"]: prop["@qualName"] for prop in spec_json["extension"]["property"] }
-            self.dwc_fields = properties
+            with open(spec_path) as spec_file:
+                spec_json = xmltodict.parse(spec_file.read())
+                properties = { prop["@name"]: prop["@qualName"] for prop in spec_json["extension"]["property"] }
+                self.dwc_fields = properties
+                self.row_type = spec_json["extension"]["@rowType"]
+
         else:
-            raise Exception(f"Row type {self.row_type} not supported")
+            raise Exception(f"Specification {self.spec} not supported")
 
     def get_dwc_fields(self) -> Dict:
         """Return a dictionary with all Darwin Core field names and URIs for this table, fetch if non populated."""
@@ -90,6 +93,8 @@ class Table:
     def get_table_xml(self, only_mapped_columns: bool=False, is_core=False) -> ET.Element:
         """Generate the XML element for this table's entry in meta.xml."""
 
+        fields = self.get_fields(only_mapped_columns)
+
         root = ET.Element("core" if is_core else "extension", attrib=self.get_attributes())
         
         # files
@@ -108,7 +113,7 @@ class Table:
 
         # field
 
-        for field in self.get_fields(only_mapped_columns):
+        for field in fields:
             if field["index_output"] is not None and field["uri"] is not None:
                 ET.SubElement(root, "field", attrib={"index": str(field["index_output"]), "term": field["uri"]})
 

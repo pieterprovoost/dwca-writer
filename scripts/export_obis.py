@@ -31,7 +31,7 @@ def export_dataset(dataset_id: str) -> None:
     # create archive
 
     archive = Archive()
-    table = Table(row_type="http://rs.tdwg.org/dwc/terms/Occurrence", data=df, id_index=0)
+    table = Table(spec="https://rs.gbif.org/core/dwc_occurrence_2022-02-02.xml", data=df, id_index=0)
     archive.core = table
     archive.eml_text = eml_text
 
