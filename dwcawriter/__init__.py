@@ -26,8 +26,7 @@ def escape_character(input: str) -> str:
 
 class Table:
 
-    def __init__(self, data: pd.DataFrame=None, is_core = True, row_type: str=None, id_index=None, encoding="UTF-8", fields_terminated_by="\t", lines_terminated_by="\n", fields_enclosed_by=None, ignore_header_lines=1):
-        self.is_core = is_core
+    def __init__(self, data: pd.DataFrame=None, row_type: str=None, id_index=None, encoding="UTF-8", fields_terminated_by="\t", lines_terminated_by="\n", fields_enclosed_by=None, ignore_header_lines=1):
         self.row_type = row_type
         self.id_index = id_index
         self.data = data
@@ -48,6 +47,9 @@ class Table:
 
         if self.row_type == "http://rs.tdwg.org/dwc/terms/Occurrence":
             spec_url = "https://rs.gbif.org/core/dwc_occurrence_2022-02-02.xml"
+        elif self.row_type == "http://rs.tdwg.org/dwc/terms/MeasurementOrFact":
+            spec_url = "https://rs.gbif.org/extension/dwc/measurements_or_facts_2022-02-02.xml"
+
         if spec_url is not None:
             res = requests.get(spec_url, timeout=30, verify=False)
             content = io.BytesIO(res.content)
@@ -85,10 +87,10 @@ class Table:
 
         return result
 
-    def get_table_xml(self, only_mapped_columns: bool=False) -> ET.Element:
+    def get_table_xml(self, only_mapped_columns: bool=False, is_core=False) -> ET.Element:
         """Generate the XML element for this table's entry in meta.xml."""
 
-        root = ET.Element("core" if self.is_core else "extension", attrib=self.get_attributes())
+        root = ET.Element("core" if is_core else "extension", attrib=self.get_attributes())
         
         # files
 
@@ -99,7 +101,7 @@ class Table:
         # id / coreid
 
         if self.id_index is not None:
-            if self.is_core:
+            if is_core:
                 ET.SubElement(root, "id", attrib={"index": str(self.id_index)})
             else:
                 ET.SubElement(root, "coreid", attrib={"index": str(self.id_index)})
@@ -133,7 +135,7 @@ class Table:
 
 class Archive:
 
-    def __init__(self, eml: ET.Element=None, eml_text=None, core: Table=None, extensions: List[Table]=None):
+    def __init__(self, eml: ET.Element=None, eml_text=None, core: Table=None, extensions: List[Table]=[]):
         self.eml = eml
         self.eml_text = eml_text
         self.core = core
@@ -143,11 +145,11 @@ class Archive:
         """Return XML element for meta.xml."""
 
         root = ET.Element("archive", attrib={"xmlns": "http://rs.tdwg.org/dwc/text/", "metadata" : "eml.xml"})
-        root.append(self.core.get_table_xml(only_mapped_columns))
+        root.append(self.core.get_table_xml(only_mapped_columns, True))
         
         if self.extensions:
             for extension in self.extensions:
-                root.append(extension.get_table_xml(only_mapped_columns))
+                root.append(extension.get_table_xml(only_mapped_columns, False))
 
         return root
 
@@ -168,6 +170,11 @@ class Archive:
             core_filename = self.core.get_filename()
             with open(os.path.join(tmpdir, core_filename), "w") as f:
                 self.core.write_tsv(f, only_mapped_columns)
+
+            for extension in self.extensions:
+                extension_filename = extension.get_filename()
+                with open(os.path.join(tmpdir, extension_filename), "w") as f:
+                    extension.write_tsv(f, only_mapped_columns)
 
             zip_file = ZipFile(path, "w")
             for root, dirs, files in os.walk(tmpdir):
