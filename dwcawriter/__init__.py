@@ -91,17 +91,7 @@ class Table:
         }
 
     def write_tsv(self, file) -> None:
-
-        column_index_set = set()
-        for index, column in enumerate(self.data.columns):
-            if column in self.get_table_fields():
-                column_index_set.add(index)
-        if self.id_index is not None:
-            column_index_set.add(self.id_index)
-        column_indexes = list(column_index_set)
-        column_indexes.sort()
-
-        self.data.iloc[:, column_indexes].to_csv(file, sep=self.fields_terminated_by, index=False, escapechar="\\", encoding=self.encoding, quoting=csv.QUOTE_MINIMAL if self.fields_enclosed_by is not None else csv.QUOTE_NONE, quotechar=self.fields_enclosed_by, line_terminator=self.lines_terminated_by)
+        self.data.to_csv(file, sep=self.fields_terminated_by, index=False, escapechar="\\", encoding=self.encoding, quoting=csv.QUOTE_MINIMAL if self.fields_enclosed_by is not None else csv.QUOTE_NONE, quotechar=self.fields_enclosed_by, line_terminator=self.lines_terminated_by)
 
 
 class Archive:
