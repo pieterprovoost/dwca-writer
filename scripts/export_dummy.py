@@ -1,8 +1,5 @@
 from dwcawriter import Archive, Table
 import os
-import psycopg2
-import psycopg2.extras
-from dotenv.main import load_dotenv
 import pandas as pd
 
 
