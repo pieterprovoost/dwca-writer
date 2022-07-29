@@ -10,7 +10,7 @@ from zipfile import ZipFile
 import csv
 
 
-def dump_tree(root: ET.Element, encoding:str="UTF-8") -> str:
+def xml_to_string(root: ET.Element, encoding:str="UTF-8") -> str:
     """Dump an XML element to string."""
 
     tree = ET.ElementTree(root)
@@ -64,24 +64,28 @@ class Table:
             self.fetch_dwc_fields()
         return self.dwc_fields
 
-    def get_fields(self) -> List[Dict]:
+    def get_fields(self, only_mapped_columns: bool=False) -> List[Dict]:
         """Return a data structure listing all table fields, their mapping, and their index in the output file."""
 
         result = []
+        index_output = 0
 
         for index, column in enumerate(self.data.columns):
             entry = {
                 "name": column,
-                "index_output": index, # TODO: fix for only mapped columns feature (to be added)
+                "index_output": None,
                 "uri": None
             }
+            if column in self.get_dwc_fields() or index == self.id_index or only_mapped_columns == False:
+                entry["index_output"] = index_output
+                index_output = index_output + 1
             if column in self.get_dwc_fields():
                 entry["uri"] = self.get_dwc_fields()[column]
             result.append(entry)
 
         return result
 
-    def get_xml_element(self) -> ET.Element:
+    def get_table_xml(self, only_mapped_columns: bool=False) -> ET.Element:
         """Generate the XML element for this table's entry in meta.xml."""
 
         root = ET.Element("core" if self.is_core else "extension", attrib=self.get_attributes())
@@ -102,7 +106,7 @@ class Table:
 
         # field
 
-        for field in self.get_fields():
+        for field in self.get_fields(only_mapped_columns):
             if field["index_output"] is not None and field["uri"] is not None:
                 ET.SubElement(root, "field", attrib={"index": str(field["index_output"]), "term": field["uri"]})
 
@@ -120,10 +124,10 @@ class Table:
             "rowType": self.row_type
         }
 
-    def write_tsv(self, file) -> None:
+    def write_tsv(self, file, only_mapped_columns: bool=False) -> None:
         """Write the table to tsv."""
 
-        exported_fields = [field["name"] for field in self.get_fields() if field["index_output"] is not None]
+        exported_fields = [field["name"] for field in self.get_fields(only_mapped_columns) if field["index_output"] is not None]
         self.data.loc[:, exported_fields].to_csv(file, sep=self.fields_terminated_by, index=False, escapechar="\\", encoding=self.encoding, quoting=csv.QUOTE_MINIMAL if self.fields_enclosed_by is not None else csv.QUOTE_NONE, quotechar=self.fields_enclosed_by, line_terminator=self.lines_terminated_by)
 
 
@@ -135,35 +139,35 @@ class Archive:
         self.core = core
         self.extensions = extensions
 
-    def get_meta_xml(self) -> ET.Element:
+    def get_meta_xml(self, only_mapped_columns: bool=False) -> ET.Element:
         """Return XML element for meta.xml."""
 
         root = ET.Element("archive", attrib={"xmlns": "http://rs.tdwg.org/dwc/text/", "metadata" : "eml.xml"})
-        root.append(self.core.get_xml_element())
+        root.append(self.core.get_table_xml(only_mapped_columns))
         
         if self.extensions:
             for extension in self.extensions:
-                root.append(extension.get_xml_element())
+                root.append(extension.get_table_xml(only_mapped_columns))
 
         return root
 
-    def export(self, path: str) -> None:
+    def export(self, path: str, only_mapped_columns: bool=False) -> None:
         """Export Darwin Core Archive."""
 
         with tempfile.TemporaryDirectory() as tmpdir:
 
             with open(os.path.join(tmpdir, "meta.xml"), "w") as f:
-                f.write(dump_tree(self.get_meta_xml()))
+                f.write(xml_to_string(self.get_meta_xml(only_mapped_columns)))
 
             with open(os.path.join(tmpdir, "eml.xml"), "w") as f:
                 if self.eml_text is not None:
                     f.write(self.eml_text)
                 else:
-                    f.write(dump_tree(self.eml))
+                    f.write(xml_to_string(self.eml))
 
             core_filename = self.core.get_filename()
             with open(os.path.join(tmpdir, core_filename), "w") as f:
-                self.core.write_tsv(f)
+                self.core.write_tsv(f, only_mapped_columns)
 
             zip_file = ZipFile(path, "w")
             for root, dirs, files in os.walk(tmpdir):
