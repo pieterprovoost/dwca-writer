@@ -1,9 +1,7 @@
 from typing import Dict, List
 import pandas as pd
 import xml.etree.ElementTree as ET
-import requests
 import xmltodict
-import io
 import tempfile
 import os
 from zipfile import ZipFile
