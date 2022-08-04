@@ -45,8 +45,8 @@ class Table:
 
         return self.row_type.split("/")[-1].lower() + ".txt"
 
-    def fetch_dwc_fields(self) -> Dict:
-        """Populate a dictionary with all Darwin Core field names and URIs for this table."""
+    def update_spec(self) -> Dict:
+        """Populate row type and a dictionary with all associated Darwin Core field names and URIs."""
 
         if self.spec is not None and self.spec.startswith("https://rs.gbif.org/"):
             spec_location = re.search("https://rs.gbif.org/(.+xml)", self.spec).group(1)
@@ -55,19 +55,11 @@ class Table:
 
             with open(spec_path) as spec_file:
                 spec_json = xmltodict.parse(spec_file.read())
-                properties = { prop["@name"]: prop["@qualName"] for prop in spec_json["extension"]["property"] }
-                self.dwc_fields = properties
                 self.row_type = spec_json["extension"]["@rowType"]
+                self.dwc_fields = { prop["@name"]: prop["@qualName"] for prop in spec_json["extension"]["property"] }
 
         else:
             raise Exception(f"Specification {self.spec} not supported")
-
-    def get_dwc_fields(self) -> Dict:
-        """Return a dictionary with all Darwin Core field names and URIs for this table, fetch if non populated."""
-
-        if self.dwc_fields is None:
-            self.fetch_dwc_fields()
-        return self.dwc_fields
 
     def get_fields(self, only_mapped_columns: bool=False) -> List[Dict]:
         """Return a data structure listing all table fields, their mapping, and their index in the output file."""
@@ -81,11 +73,11 @@ class Table:
                 "index_output": None,
                 "uri": None
             }
-            if column in self.get_dwc_fields() or index == self.id_index or only_mapped_columns == False:
+            if column in self.dwc_fields or index == self.id_index or only_mapped_columns == False:
                 entry["index_output"] = index_output
                 index_output = index_output + 1
-            if column in self.get_dwc_fields():
-                entry["uri"] = self.get_dwc_fields()[column]
+            if column in self.dwc_fields:
+                entry["uri"] = self.dwc_fields[column]
             result.append(entry)
 
         return result
@@ -93,6 +85,7 @@ class Table:
     def get_table_xml(self, only_mapped_columns: bool=False, is_core=False) -> ET.Element:
         """Generate the XML element for this table's entry in meta.xml."""
 
+        self.update_spec()
         fields = self.get_fields(only_mapped_columns)
 
         root = ET.Element("core" if is_core else "extension", attrib=self.get_attributes())
@@ -134,7 +127,9 @@ class Table:
     def write_tsv(self, file, only_mapped_columns: bool=False) -> None:
         """Write the table to tsv."""
 
-        exported_fields = [field["name"] for field in self.get_fields(only_mapped_columns) if field["index_output"] is not None]
+        self.update_spec()
+        fields = self.get_fields(only_mapped_columns)
+        exported_fields = [field["name"] for field in fields if field["index_output"] is not None]
         self.data.loc[:, exported_fields].to_csv(file, sep=self.fields_terminated_by, index=False, escapechar="\\", encoding=self.encoding, quoting=csv.QUOTE_MINIMAL if self.fields_enclosed_by is not None else csv.QUOTE_NONE, quotechar=self.fields_enclosed_by, line_terminator=self.lines_terminated_by)
 
 
