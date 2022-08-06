@@ -8,6 +8,7 @@ from zipfile import ZipFile
 import csv
 import pkg_resources
 import re
+import warnings
 
 
 def xml_to_string(root: ET.Element, encoding:str="UTF-8") -> str:
@@ -121,6 +122,26 @@ class Table:
             "ignoreHeaderLines": str(self.ignore_header_lines),
             "rowType": self.row_type
         }
+
+    def has_column(self, name:str) -> bool:
+        """Table has a column with the specified name."""
+
+        return name in [field["name"] for field in self.get_fields()]
+
+    def add_id(self, name="id"):
+        """Add a sequential id column, copy the column if id_index is already set."""
+
+        self.update_spec()
+        if self.has_column(name):
+            warnings.warn(f"Column {name} already exists")
+        elif self.id_index is not None:
+            self.data.insert(0, name, self.data.iloc[:, self.id_index])
+            self.id_index = 0
+            self.update_spec()
+        else:
+            self.data.insert(0, name, range(1, 1 + len(self.data)))
+            self.id_index = 0
+            self.update_spec()
 
     def write_tsv(self, file, only_mapped_columns: bool=False) -> None:
         """Write the table to tsv."""

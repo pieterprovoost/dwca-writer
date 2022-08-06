@@ -4,7 +4,7 @@ import pandas as pd
 
 
 data_core = {
-    "id": [1, 2, 3],
+    "occurrenceID": [1, 2, 3],
     "scientificName": ["Abra alba", "Lanice conchilega", "Nereis diversicolor"],
     "notes": ["white", "brown", "green"],
     "year": [2008, 2009, 2010]
@@ -20,9 +20,11 @@ df_extension = pd.DataFrame(data=data_extension)
 
 archive = Archive()
 core_table = Table(spec="https://rs.gbif.org/core/dwc_occurrence_2022-02-02.xml", data=df_core, id_index=0)
+core_table.add_id()
 archive.core = core_table
 extension_table = Table(spec="https://rs.gbif.org/extension/dwc/measurements_or_facts_2022-02-02.xml", data=df_extension, id_index=0)
 archive.extensions.append(extension_table)
+
 archive.eml_text = """<?xml version="1.0" encoding="UTF-8"?>
 <ns0:eml xmlns:ns0="eml://ecoinformatics.org/eml-2.1.1" packageId="http://ipt.vliz.be/kmfri/resource?id=vegetation_gazi_bay_kenya_1987/v1.0" scope="system" system="http://gbif.org" xml:lang="eng">
   <dataset>
