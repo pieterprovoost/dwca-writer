@@ -19,11 +19,13 @@ data_extension = {
 df_extension = pd.DataFrame(data=data_extension)
 
 archive = Archive()
-core_table = Table(spec="https://rs.gbif.org/core/dwc_occurrence_2022-02-02.xml", data=df_core, id_index=0)
+core_table = Table(spec="https://rs.gbif.org/core/dwc_occurrence_2022-02-02.xml", data=df_core, id_index=0, only_mapped_columns=True)
 core_table.add_id()
 archive.core = core_table
 extension_table = Table(spec="https://rs.gbif.org/extension/dwc/measurements_or_facts_2022-02-02.xml", data=df_extension, id_index=0)
 archive.extensions.append(extension_table)
+
+print(archive)
 
 archive.eml_text = """<?xml version="1.0" encoding="UTF-8"?>
 <ns0:eml xmlns:ns0="eml://ecoinformatics.org/eml-2.1.1" packageId="http://ipt.vliz.be/kmfri/resource?id=vegetation_gazi_bay_kenya_1987/v1.0" scope="system" system="http://gbif.org" xml:lang="eng">
@@ -48,4 +50,4 @@ archive.eml_text = """<?xml version="1.0" encoding="UTF-8"?>
   </dataset>
 </ns0:eml>"""
 
-archive.export(os.path.expanduser(f"~/Desktop/temp/dummy.zip"), only_mapped_columns=True)
+archive.export(os.path.expanduser(f"~/Desktop/temp/dummy.zip"))

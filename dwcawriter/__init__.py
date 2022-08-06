@@ -11,7 +11,7 @@ import re
 import warnings
 
 
-def xml_to_string(root: ET.Element, encoding:str="UTF-8") -> str:
+def xml_to_string(root: ET.Element, encoding: str="UTF-8") -> str:
     """Dump an XML element to string."""
 
     tree = ET.ElementTree(root)
@@ -27,7 +27,7 @@ def escape_character(input: str) -> str:
 
 class Table:
 
-    def __init__(self, data: pd.DataFrame=None, spec: str=None, id_index=None, encoding="UTF-8", fields_terminated_by="\t", lines_terminated_by="\n", fields_enclosed_by=None, ignore_header_lines=1):
+    def __init__(self, data: pd.DataFrame=None, spec: str=None, id_index: int=None, encoding: str="UTF-8", fields_terminated_by: str="\t", lines_terminated_by: str="\n", fields_enclosed_by: str=None, ignore_header_lines: int=1, only_mapped_columns: bool=False):
         self.spec = spec
         self.id_index = id_index
         self.data = data
@@ -38,6 +38,7 @@ class Table:
         self.ignore_header_lines = ignore_header_lines
         self.dwc_fields = None
         self.row_type = None
+        self.only_mapped_columns = only_mapped_columns
 
     def get_filename(self) -> str:
         """Generate a filename for this table."""
@@ -60,8 +61,11 @@ class Table:
         else:
             raise Exception(f"Specification {self.spec} not supported")
 
-    def get_fields(self, only_mapped_columns: bool=False) -> List[Dict]:
+    def get_fields(self) -> List[Dict]:
         """Return a data structure listing all table fields, their mapping, and their index in the output file."""
+
+        if self.dwc_fields is None:
+            self.update_spec()
 
         result = []
         index_output = 0
@@ -72,7 +76,7 @@ class Table:
                 "index_output": None,
                 "uri": None
             }
-            if column in self.dwc_fields or index == self.id_index or only_mapped_columns == False:
+            if column in self.dwc_fields or index == self.id_index or self.only_mapped_columns == False:
                 entry["index_output"] = index_output
                 index_output = index_output + 1
             if column in self.dwc_fields:
@@ -81,11 +85,11 @@ class Table:
 
         return result
 
-    def get_table_xml(self, only_mapped_columns: bool=False, is_core=False) -> ET.Element:
+    def get_table_xml(self, is_core=False) -> ET.Element:
         """Generate the XML element for this table's entry in meta.xml."""
 
         self.update_spec()
-        fields = self.get_fields(only_mapped_columns)
+        fields = self.get_fields()
 
         root = ET.Element("core" if is_core else "extension", attrib=self.get_attributes())
         
@@ -128,28 +132,32 @@ class Table:
 
         return name in [field["name"] for field in self.get_fields()]
 
-    def add_id(self, name="id"):
+    def add_id(self, name: str="id") -> None:
         """Add a sequential id column, copy the column if id_index is already set."""
 
-        self.update_spec()
         if self.has_column(name):
             warnings.warn(f"Column {name} already exists")
         elif self.id_index is not None:
             self.data.insert(0, name, self.data.iloc[:, self.id_index])
             self.id_index = 0
-            self.update_spec()
         else:
             self.data.insert(0, name, range(1, 1 + len(self.data)))
             self.id_index = 0
-            self.update_spec()
 
-    def write_tsv(self, file, only_mapped_columns: bool=False) -> None:
+    def write_tsv(self, file) -> None:
         """Write the table to tsv."""
 
-        self.update_spec()
-        fields = self.get_fields(only_mapped_columns)
+        fields = self.get_fields()
         exported_fields = [field["name"] for field in fields if field["index_output"] is not None]
         self.data.loc[:, exported_fields].to_csv(file, sep=self.fields_terminated_by, index=False, escapechar="\\", encoding=self.encoding, quoting=csv.QUOTE_MINIMAL if self.fields_enclosed_by is not None else csv.QUOTE_NONE, quotechar=self.fields_enclosed_by, line_terminator=self.lines_terminated_by)
+
+    def __str__(self):
+        if self.row_type is None:
+            self.update_spec()
+        result = f"Table of type {self.row_type} with {len(self.data)} rows and {len(self.data.columns)} columns"
+        for field in self.get_fields():
+            result = result + f"\n  {field['name']}{': ' + field['uri'] if field['uri'] is not None else ''}{' (column ' + str(field['index_output'] + 1) + ')' if field['index_output'] is not None else ''}"
+        return result
 
 
 class Archive:
@@ -160,25 +168,25 @@ class Archive:
         self.core = core
         self.extensions = extensions
 
-    def get_meta_xml(self, only_mapped_columns: bool=False) -> ET.Element:
+    def get_meta_xml(self) -> ET.Element:
         """Return XML element for meta.xml."""
 
         root = ET.Element("archive", attrib={"xmlns": "http://rs.tdwg.org/dwc/text/", "metadata" : "eml.xml"})
-        root.append(self.core.get_table_xml(only_mapped_columns, True))
+        root.append(self.core.get_table_xml(True))
         
         if self.extensions:
             for extension in self.extensions:
-                root.append(extension.get_table_xml(only_mapped_columns, False))
+                root.append(extension.get_table_xml(False))
 
         return root
 
-    def export(self, path: str, only_mapped_columns: bool=False) -> None:
+    def export(self, path: str) -> None:
         """Export Darwin Core Archive."""
 
         with tempfile.TemporaryDirectory() as tmpdir:
 
             with open(os.path.join(tmpdir, "meta.xml"), "w") as f:
-                f.write(xml_to_string(self.get_meta_xml(only_mapped_columns)))
+                f.write(xml_to_string(self.get_meta_xml()))
 
             with open(os.path.join(tmpdir, "eml.xml"), "w") as f:
                 if self.eml_text is not None:
@@ -188,14 +196,22 @@ class Archive:
 
             core_filename = self.core.get_filename()
             with open(os.path.join(tmpdir, core_filename), "w") as f:
-                self.core.write_tsv(f, only_mapped_columns)
+                self.core.write_tsv(f)
 
             for extension in self.extensions:
                 extension_filename = extension.get_filename()
                 with open(os.path.join(tmpdir, extension_filename), "w") as f:
-                    extension.write_tsv(f, only_mapped_columns)
+                    extension.write_tsv(f)
 
             zip_file = ZipFile(path, "w")
             for root, dirs, files in os.walk(tmpdir):
                 for file in files:
                     zip_file.write(os.path.join(root, file), arcname=file)
+
+    def __str__(self):
+        result = f"Archive with {'1' if self.core is not None else '0'} core tables and {len(self.extensions)} extension tables"
+        if self.core is not None:
+            result = result + "\n" + str(self.core)
+        for extension in self.extensions:
+            result = result + "\n" + str(extension)
+        return result
