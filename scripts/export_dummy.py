@@ -20,7 +20,6 @@ df_extension = pd.DataFrame(data=data_extension)
 
 archive = Archive()
 core_table = Table(spec="https://rs.gbif.org/core/dwc_occurrence_2022-02-02.xml", data=df_core, id_index=0, only_mapped_columns=True)
-core_table.add_id()
 archive.core = core_table
 extension_table = Table(spec="https://rs.gbif.org/extension/dwc/measurements_or_facts_2022-02-02.xml", data=df_extension, id_index=0)
 archive.extensions.append(extension_table)
