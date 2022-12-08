@@ -17,7 +17,7 @@ def escape_character(input: str) -> str:
 
 class Table:
 
-    def __init__(self, data: pd.DataFrame=None, spec: str=None, id_index: int=None, encoding: str="UTF-8", fields_terminated_by: str="\t", lines_terminated_by: str="\n", fields_enclosed_by: str=None, ignore_header_lines: int=1, only_mapped_columns: bool=False):
+    def __init__(self, data: pd.DataFrame = None, spec: str = None, id_index: int = None, encoding: str = "UTF-8", fields_terminated_by: str = "\t", lines_terminated_by: str = "\n", fields_enclosed_by: str = None, ignore_header_lines: int = 1, only_mapped_columns: bool = False):
         self.spec = spec
         self.id_index = id_index
         self.data = data
@@ -117,12 +117,12 @@ class Table:
             "rowType": self.row_type
         }
 
-    def has_column(self, name:str) -> bool:
+    def has_column(self, name: str) -> bool:
         """Table has a column with the specified name."""
 
         return name in [field["name"] for field in self.get_fields()]
 
-    def add_id(self, name: str="id") -> None:
+    def add_id(self, name: str = "id") -> None:
         """Add a sequential id column, copy the column if id_index is already set."""
 
         if self.has_column(name):

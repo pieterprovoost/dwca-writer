@@ -23,8 +23,7 @@ core_table = Table(spec="https://rs.gbif.org/core/dwc_occurrence_2022-02-02.xml"
 archive.core = core_table
 extension_table = Table(spec="https://rs.gbif.org/extension/dwc/measurements_or_facts_2022-02-02.xml", data=df_extension, id_index=0)
 archive.extensions.append(extension_table)
-
-print(archive)
+#print(archive)
 
 archive.eml_text = """<?xml version="1.0" encoding="UTF-8"?>
 <ns0:eml xmlns:ns0="eml://ecoinformatics.org/eml-2.1.1" packageId="http://ipt.vliz.be/kmfri/resource?id=vegetation_gazi_bay_kenya_1987/v1.0" scope="system" system="http://gbif.org" xml:lang="eng">
@@ -50,3 +49,33 @@ archive.eml_text = """<?xml version="1.0" encoding="UTF-8"?>
 </ns0:eml>"""
 
 archive.export(os.path.expanduser(f"~/Desktop/temp/dummy.zip"))
+
+data_core_2 = {
+    "occurrenceID": [11, 12, 13],
+    "scientificName": ["Abra alba", "Lanice conchilega", "Nereis diversicolor"],
+    "occurrenceRemarks": ["white", "brown", "green"],
+    "year": [2008, 2009, 2010]
+}
+df_core_2 = pd.DataFrame(data=data_core_2)
+
+data_extension_2 = {
+    "id": [11, 12, 13],
+    "measurementType": ["temperature", "temperature", "temperature"],
+    "measurementValue": [12, 13, 14],
+    "measurementUnit": ["dC", "dC", "dC"]
+}
+df_extension_2 = pd.DataFrame(data=data_extension_2)
+
+archive_2 = Archive()
+core_table_2 = Table(spec="https://rs.gbif.org/core/dwc_occurrence_2022-02-02.xml", data=df_core_2, id_index=0, only_mapped_columns=True)
+archive_2.core = core_table_2
+#extension_table_2 = Table(spec="https://rs.gbif.org/extension/obis/extended_measurement_or_fact.xml", data=df_extension_2, id_index=0)
+extension_table_2 = Table(spec="https://rs.gbif.org/extension/dwc/measurements_or_facts_2022-02-02.xml", data=df_extension_2, id_index=0)
+archive_2.extensions.append(extension_table_2)
+
+print("======================")
+print(archive_2)
+print("======================")
+archive.merge(archive_2)
+print(archive)
+archive.export(os.path.expanduser(f"~/Desktop/temp/merged.zip"))

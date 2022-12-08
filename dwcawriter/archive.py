@@ -4,9 +4,10 @@ import tempfile
 import os
 from zipfile import ZipFile
 from dwcawriter.table import Table
+import pandas as pd
 
 
-def xml_to_string(root: ET.Element, encoding: str="UTF-8") -> str:
+def xml_to_string(root: ET.Element, encoding: str = "UTF-8") -> str:
     """Dump an XML element to string."""
 
     tree = ET.ElementTree(root)
@@ -16,16 +17,16 @@ def xml_to_string(root: ET.Element, encoding: str="UTF-8") -> str:
 
 class Archive:
 
-    def __init__(self, eml: ET.Element=None, eml_text=None, core: Table=None, extensions: List[Table]=[]):
+    def __init__(self, eml: ET.Element = None, eml_text=None, core: Table = None, extensions: List[Table] = None):
         self.eml = eml
         self.eml_text = eml_text
         self.core = core
-        self.extensions = extensions
+        self.extensions = extensions if extensions is not None else []
 
     def get_meta_xml(self) -> ET.Element:
         """Return XML element for meta.xml."""
 
-        root = ET.Element("archive", attrib={"xmlns": "http://rs.tdwg.org/dwc/text/", "metadata" : "eml.xml"})
+        root = ET.Element("archive", attrib={"xmlns": "http://rs.tdwg.org/dwc/text/", "metadata": "eml.xml"})
         root.append(self.core.get_table_xml(True))
 
         if self.extensions:
@@ -33,6 +34,22 @@ class Archive:
                 root.append(extension.get_table_xml(False))
 
         return root
+
+    def merge(self, other: "Archive"):
+
+        if self.core.spec != other.core.spec:
+            raise Exception("Core types do not match")
+        self.core.data = pd.concat([self.core.data, other.core.data])
+
+        for extension in other.extensions:
+            merged = False
+            for existing_extension in self.extensions:
+                if extension.spec == existing_extension.spec:
+                    existing_extension.data = pd.concat([existing_extension.data, extension.data])
+                    merged = True
+                    break
+            if not merged:
+                self.extensions.append(extension)
 
     def export(self, path: str) -> None:
         """Export Darwin Core Archive."""
