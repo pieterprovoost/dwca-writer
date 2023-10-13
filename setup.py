@@ -5,7 +5,7 @@ long_description = open("README.md").read()
 
 
 setup(name="dwca-writer",
-      version="0.1.2",
+      version="0.2.0",
       author="Pieter Provoost",
       author_email="pieterprovoost@gmail.com",
       description="Python package for writing Darwin Core Archives (DwC-A)",
