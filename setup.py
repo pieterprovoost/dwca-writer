@@ -17,4 +17,8 @@ setup(name="dwca-writer",
       zip_safe=False,
       include_package_data=True,
       package_data={"dwcawriter": ["data/**/*"], "": ["README.md"]},
+      install_requires=[
+            "pandas",
+            "xmltodict",
+      ],
 )
